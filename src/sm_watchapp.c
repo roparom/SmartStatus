@@ -213,51 +213,6 @@ void rcv(DictionaryIterator *received, void *context) {
 
 }
 
-/*/ // BEGIN TEST
-static void back_click_handler(ClickRecognizerRef recognizer, void *context) {
- 
-	animation_destroy((Animation*)ani_in);
-	animation_destroy((Animation*)ani_out);
-	
-	text_layer_destroy(text_weather_cond_layer);
-	text_layer_destroy(text_weather_temp_layer);
-	text_layer_destroy(text_date_layer);
-	text_layer_destroy(text_time_layer);
-	text_layer_destroy(text_mail_layer);
-	text_layer_destroy(text_sms_layer);
-	text_layer_destroy(text_phone_layer);
-	text_layer_destroy(text_battery_layer);
-	text_layer_destroy(calendar_date_layer);
-	text_layer_destroy(calendar_text_layer);
-	text_layer_destroy(music_artist_layer);
-	text_layer_destroy(music_song_layer);
-	layer_destroy(battery_layer);
-	layer_destroy(pebble_battery_layer);
-	bitmap_layer_destroy(background_image);
-	bitmap_layer_destroy(weather_image);
-	layer_destroy(status_layer);
-	
-	
-	
-	for (int i=0; i<NUM_LAYERS; i++) {
-		layer_destroy(animated_layer[i]);
-	}
-	
-	for (int i=0; i<NUM_WEATHER_IMAGES; i++) {
-	  	gbitmap_destroy(weather_status_imgs[i]);
-	}
-	
-	gbitmap_destroy(bg_image);
-
-  	
-	tick_timer_service_unsubscribe();
-	bluetooth_connection_service_unsubscribe();
-	battery_state_service_unsubscribe();
-	
-  window_destroy(window);
- 
- }
-/*/ // END TEST
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 
