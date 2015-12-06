@@ -49,7 +49,6 @@ const int WEATHER_IMG_IDS[] = {
   RESOURCE_ID_IMAGE_DISCONNECT
 };
 
-
 static uint32_t s_sequence_number = 0xFFFFFFFE;
 
 AppMessageResult sm_message_out_get(DictionaryIterator **iter_out) {
@@ -100,7 +99,7 @@ void handle_minute_tick(struct tm *tick_time, TimeUnits units_changed) {
 
 
   // TODO: Only update the date when it's changed.
-  strftime(date_text, sizeof(date_text), "%a, %b %e", tick_time);
+  strftime(date_text, sizeof(date_text), "%a, %e %b.", tick_time); //UK DATE FORMAT
   text_layer_set_text(text_date_layer, date_text);
 
 
@@ -128,8 +127,6 @@ void rcv(DictionaryIterator *received, void *context) {
 	// Got a message callback
 	Tuple *t;
 	int *val;
-
-
 
 	t=dict_find(received, SM_WEATHER_COND_KEY); 
 	if (t!=NULL) {
@@ -216,6 +213,51 @@ void rcv(DictionaryIterator *received, void *context) {
 
 }
 
+/*/ // BEGIN TEST
+static void back_click_handler(ClickRecognizerRef recognizer, void *context) {
+ 
+	animation_destroy((Animation*)ani_in);
+	animation_destroy((Animation*)ani_out);
+	
+	text_layer_destroy(text_weather_cond_layer);
+	text_layer_destroy(text_weather_temp_layer);
+	text_layer_destroy(text_date_layer);
+	text_layer_destroy(text_time_layer);
+	text_layer_destroy(text_mail_layer);
+	text_layer_destroy(text_sms_layer);
+	text_layer_destroy(text_phone_layer);
+	text_layer_destroy(text_battery_layer);
+	text_layer_destroy(calendar_date_layer);
+	text_layer_destroy(calendar_text_layer);
+	text_layer_destroy(music_artist_layer);
+	text_layer_destroy(music_song_layer);
+	layer_destroy(battery_layer);
+	layer_destroy(pebble_battery_layer);
+	bitmap_layer_destroy(background_image);
+	bitmap_layer_destroy(weather_image);
+	layer_destroy(status_layer);
+	
+	
+	
+	for (int i=0; i<NUM_LAYERS; i++) {
+		layer_destroy(animated_layer[i]);
+	}
+	
+	for (int i=0; i<NUM_WEATHER_IMAGES; i++) {
+	  	gbitmap_destroy(weather_status_imgs[i]);
+	}
+	
+	gbitmap_destroy(bg_image);
+
+  	
+	tick_timer_service_unsubscribe();
+	bluetooth_connection_service_unsubscribe();
+	battery_state_service_unsubscribe();
+	
+  window_destroy(window);
+ 
+ }
+/*/ // END TEST
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 
@@ -223,32 +265,61 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 	animation_schedule((Animation*)ani_out);
 
 
-	active_layer = (active_layer + 1) % (NUM_LAYERS);
+	active_layer = (active_layer + 2) % (NUM_LAYERS);
 
 
 	ani_in = property_animation_create_layer_frame(animated_layer[active_layer], &GRect(144, 77, 144, 45), &GRect(0, 77, 144, 45));
 	animation_schedule((Animation*)ani_in);
 
 }
+	
+static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+	sendCommand(SM_PLAYPAUSE_KEY);
+}
+
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
+	sendCommand(SM_VOLUME_UP_KEY);
+	}
+
+	
+static void up_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+		
+	if (active_layer == MUSIC_LAYER) {
+	sendCommand(SM_PREVIOUS_TRACK_KEY);
+} else {
+	//text_layer_set_text(text_date_layer, "Invoke Siri" ); //does not refresh until next minute tick
 	sendCommand(SM_OPEN_SIRI_KEY);
 }
-
-static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
-	text_layer_set_text(text_weather_cond_layer, "Updating..." ); 	
-	
-	sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
 }
 
+
+static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
+	sendCommand(SM_VOLUME_DOWN_KEY);
+}
+
+
+static void down_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+		if (active_layer == MUSIC_LAYER) {
+	sendCommand(SM_NEXT_TRACK_KEY);
+} else {
+
+	//update screen
+	text_layer_set_text(text_weather_cond_layer, "Updating..." ); 	
+	sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
+}
+}
+
+	
 static void click_config_provider(void *context) {
-
-
-  window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
-  window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
-  window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
-
-
+ 	window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
+	window_long_click_subscribe(BUTTON_ID_SELECT, 250, select_long_click_handler, NULL);
+  
+	window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
+	window_long_click_subscribe(BUTTON_ID_UP, 250, up_long_click_handler, NULL); 
+  
+	window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
+	window_long_click_subscribe(BUTTON_ID_DOWN, 250, down_long_click_handler, NULL);	
 }
 
 void reset() {
@@ -259,8 +330,35 @@ void reset() {
 
 void battery_layer_update_callback(Layer *me, GContext* ctx) {
 	
-	graphics_context_set_stroke_color(ctx, GColorBlack);
-	graphics_context_set_fill_color(ctx, GColorWhite);
+		GColor stroke;
+		GColor fill;
+	
+		//PHONE BATTERY STATE COLOURS
+		if(batteryPercent <= 35) { 
+		stroke = PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorRed, GColorWhite);
+	}	
+		else if(batteryPercent <= 45) {
+		stroke = PBL_IF_COLOR_ELSE(GColorOrange, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorChromeYellow, GColorWhite);
+	}
+		else if(batteryPercent <= 55) {
+		stroke = PBL_IF_COLOR_ELSE(GColorGreen, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorBrightGreen, GColorWhite);
+	}
+		else if(batteryPercent == 100) {
+		stroke = PBL_IF_COLOR_ELSE(GColorBlue, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorCobaltBlue, GColorWhite); 
+	}
+		else {
+		stroke = PBL_IF_COLOR_ELSE(GColorDarkGreen, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorGreen, GColorWhite); 		
+	}
+	
+	
+	//DEFINE SET COLOURS
+	graphics_context_set_stroke_color(ctx, stroke); 
+	graphics_context_set_fill_color(ctx, fill);
 
 	graphics_fill_rect(ctx, GRect(15-(int)((batteryPercent/100.0)*15.0), 0, 15, 7), 0, GCornerNone);
 	
@@ -268,8 +366,34 @@ void battery_layer_update_callback(Layer *me, GContext* ctx) {
 
 void pebble_battery_layer_update_callback(Layer *me, GContext* ctx) {
 	
-	graphics_context_set_stroke_color(ctx, GColorBlack);
-	graphics_context_set_fill_color(ctx, GColorWhite);
+		GColor stroke;
+		GColor fill;
+	
+		//PEBBLE BATTERY STATE COLOURS
+		if(batteryPblPercent <= 20) { 
+		stroke = PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorRed, GColorWhite);
+	}	
+		else if(batteryPblPercent <= 30) {
+		stroke = PBL_IF_COLOR_ELSE(GColorOrange, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorChromeYellow, GColorWhite);
+	}
+		else if(batteryPblPercent <= 40) {
+		stroke = PBL_IF_COLOR_ELSE(GColorGreen, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorBrightGreen, GColorWhite);
+	}	
+		else if(batteryPblPercent == 100) {
+		stroke = PBL_IF_COLOR_ELSE(GColorBlue, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorCobaltBlue, GColorWhite); 
+	}
+		else {
+		stroke = PBL_IF_COLOR_ELSE(GColorDarkGreen, GColorBlack); 	
+		fill = PBL_IF_COLOR_ELSE(GColorGreen, GColorWhite); 		
+	}
+	
+	
+	graphics_context_set_stroke_color(ctx, stroke);
+	graphics_context_set_fill_color(ctx, fill);
 
 	graphics_fill_rect(ctx, GRect(15-(int)((batteryPblPercent/100.0)*15.0), 0, 15, 7), 0, GCornerNone);
 	
@@ -327,8 +451,13 @@ void batteryChanged(BatteryChargeState batt) {
 
 static void init(void) {
   window = window_create();
-  window_set_fullscreen(window, true);
-
+  
+	#if PBL_BW
+	window_set_fullscreen(window, true);
+	#else
+	
+	#endif
+	
   window_set_click_config_provider(window, click_config_provider);
   window_set_window_handlers(window, (WindowHandlers) {
     .load = window_load,
@@ -465,7 +594,7 @@ static void init(void) {
 		layer_add_child(status_layer, text_layer_get_layer(text_sms_layer));
 		text_layer_set_text(text_sms_layer, "-"); 	
 
-		text_phone_layer = text_layer_create(GRect(78, 18, 23, 48));
+		text_phone_layer = text_layer_create(GRect(80, 18, 23, 48)); //from 78 to 80
 		text_layer_set_text_alignment(text_phone_layer, GTextAlignmentCenter);
 		text_layer_set_text_color(text_phone_layer, GColorWhite);
 		text_layer_set_background_color(text_phone_layer, GColorClear);
